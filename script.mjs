@@ -81,29 +81,100 @@ const CourseInfo = {
     }
   ];
   
-  function getLearnerData(course, ag, submissions) {
-    // here, we would process this data to achieve the desired result.
-    if (course_id!==ag.course_id){
-        throw new Error("Invalid input: AssignmentGroup does not belong to the specified course.");
-    }
-    const result = [
-      {
-        id: 125,
-        avg: 0.985, // (47 + 150) / (50 + 150)
-        1: 0.94, // 47 / 50
-        2: 1.0 // 150 / 150
-      },
-      {
-        id: 132,
-        avg: 0.82, // (39 + 125) / (50 + 150)
-        1: 0.78, // 39 / 50
-        2: 0.833 // late: (140 - 15) / 150
-      }
-    ];
-  
-    return result;
+  function calculatePercentage(score, pointsPossible) {
+    return pointsPossible ? (score / pointsPossible) * 100 : 0;
   }
-  
-  const result = getLearnerData(CourseInfo, AssignmentGroup, LearnerSubmissions);
-  
+
+  // Main function to get learner data
+  function getLearnerData(course, ag, submissions) {
+    try {
+      // Validate that the AssignmentGroup belongs to the specified course
+      if (ag.course_id !== course.id) {
+        throw new Error(
+          'Invalid input: AssignmentGroup does not belong to the specified course.'
+        );
+      }
+
+      const learnerData = {};
+
+      ag.assignments.forEach((assignment) => {
+        if (assignment.points_possible === 0) {
+          throw new Error(
+            'Invalid input: Assignment points possible cannot be zero.'
+          );
+        }
+      });
+
+      submissions.forEach((submission) => {
+        try {
+          const {
+            learner_id,
+            assignment_id,
+            submission: { submitted_at, score },
+          } = submission;
+          const assignment = ag.assignments.find((a) => a.id === assignment_id);
+
+          if (!assignment) {
+            throw new Error(
+              `Invalid input: No assignment found with ID ${assignment_id}.`
+            );
+          }
+
+          const dueDate = new Date(assignment.due_at);
+          const submittedDate = new Date(submitted_at);
+
+          if (submittedDate > dueDate) {
+            score -= assignment.points_possible * 0.1; // Deduct 10% if submitted late
+          }
+
+          const scorePercentage = calculatePercentage(
+            score,
+            assignment.points_possible
+          );
+
+          if (!learnerData[learner_id]) {
+            learnerData[learner_id] = {
+              id: learner_id,
+              totalScore: 0,
+              totalWeight: 0,
+              scores: {},
+            };
+          }
+
+          const learner = learnerData[learner_id];
+          learner.totalScore += score;
+          learner.totalWeight += assignment.points_possible;
+          learner.scores[assignment_id] = scorePercentage;
+        } catch (error) {
+          console.error(
+            `Error processing submission for learner ${submission.learner_id}:`,
+            error.message
+          );
+        }
+      });
+
+      return Object.values(learnerData).map((learner) => {
+        const avg = learner.totalWeight
+          ? learner.totalScore / learner.totalWeight
+          : 0;
+        const formattedScores = Object.fromEntries(
+          Object.entries(learner.scores).map(([id, percentage]) => [
+            id,
+            percentage,
+          ])
+        );
+        return { id: learner.id, avg, ...formattedScores };
+      });
+    } catch (error) {
+      console.error('Error processing data:', error.message);
+      return []; // Return an empty array if an error occurs
+    }
+  }
+
+  const result = getLearnerData(
+    CourseInfo,
+    AssignmentGroup,
+    LearnerSubmissions
+  );
+
   console.log(result);
