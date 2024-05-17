@@ -82,39 +82,44 @@ const CourseInfo = {
   ];
   
   function getLearnerData(course, ag, submissions) {
-    // Validate input
-    if (!course || !ag || !submissions || !Array.isArray(submissions)) {
-      throw new Error('Invalid input data');
-    }
+    try {
+      // Validate input
+      if (!course || !ag || !submissions || !Array.isArray(submissions)) {
+        throw new Error('Invalid input data');
+      }
   
-    // Process data
-    const result = [];
-    submissions.forEach(submission => {
-      const learnerId = submission.learner_id;
-      const learnerSubmissions = submissions.filter(sub => sub.learner_id === learnerId);
-      const learnerAssignments = {};
-      let totalScore = 0;
-      let totalPointsPossible = 0;
+      // Process data
+      const result = [];
+      for (const submission of submissions) {
+        const learnerId = submission.learner_id;
+        const learnerSubmissions = submissions.filter(sub => sub.learner_id === learnerId);
+        const learnerAssignments = {};
+        let totalScore = 0;
+        let totalPointsPossible = 0;
   
-      learnerSubmissions.forEach(sub => {
-        const assignment = ag.assignments.find(assignment => assignment.id === sub.assignment_id);
-        if (!assignment || new Date(submission.submission.submitted_at) > new Date(assignment.due_at)) {
-          return; // Skip invalid or late submissions
+        for (const sub of learnerSubmissions) {
+          const assignment = ag.assignments.find(assignment => assignment.id === sub.assignment_id);
+          if (!assignment || new Date(submission.submission.submitted_at) > new Date(assignment.due_at)) {
+            continue; // Skip invalid or late submissions
+          }
+          totalScore += sub.submission.score;
+          totalPointsPossible += assignment.points_possible;
+          learnerAssignments[sub.assignment_id] = sub.submission.score / assignment.points_possible;
         }
-        totalScore += sub.submission.score;
-        totalPointsPossible += assignment.points_possible;
-        learnerAssignments[sub.assignment_id] = sub.submission.score / assignment.points_possible;
-      });
   
-      const weightedAverage = totalPointsPossible ? totalScore / totalPointsPossible : 0;
-      result.push({
-        id: learnerId,
-        avg: weightedAverage,
-        ...learnerAssignments
-      });
-    });
+        const weightedAverage = totalPointsPossible ? totalScore / totalPointsPossible : 0;
+        result.push({
+          id: learnerId,
+          avg: weightedAverage,
+          ...learnerAssignments
+        });
+      }
   
-    return result;
+      return result;
+    } catch (error) {
+      console.error('Error:', error.message);
+      return [];
+    }
   }
   
   const result = getLearnerData(CourseInfo, AssignmentGroup, LearnerSubmissions);
